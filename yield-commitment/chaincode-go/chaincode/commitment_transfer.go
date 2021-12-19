@@ -86,7 +86,7 @@ func (s *SmartContract) CreateCommitment(ctx contractapi.TransactionContextInter
 	if commitmentInput.Size <= 0 {
 		return fmt.Errorf("size field must be a positive integer")
 	}
-	if commitmentInput.Crop == 0 {
+	if len(commitmentInput.Crop) == 0 {
 		return fmt.Errorf("crop field must be a non-empty string")
 	}
 	if commitmentInput.Rate <= 0 {
