@@ -126,7 +126,7 @@ func (s *SmartContract) CreateCommitment(ctx contractapi.TransactionContextInter
 		Type:  commitmentInput.Type,
 		ID:    commitmentInput.ID,
 		Location: commitmentInput.Location,
-		Production: commitmentInput.Production
+		Production: commitmentInput.Production,
 		Size:  commitmentInput.Size,
 		Crop: commitmentInput.Crop,
 		Owner: clientID,
