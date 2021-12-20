@@ -13,6 +13,8 @@ import (
 )
 
 const commitmentCollection = "commitmentCollection"
+const dataCollection = "dataCollection"
+const yieldCollection = "yieldCollection"
 const transferAgreementObjectType = "transferAgreement"
 
 // SmartContract of this fabric sample
@@ -26,9 +28,10 @@ type Commitment struct {
 	ID    string `json:"commitmentID"`
 	Location string `json:"location"`
 	Production  int    `json:"production"`
+	Crop string   `json:"crop"`
 	Size  int    `json:"size"`
-	Crop string `json:"crop"` 
-	Owner string `json:"owner"`
+	Owner string `json:"owner"` 
+
 }
 
 // CommitmentPrivateDetails describes details that are private to owners
@@ -41,6 +44,234 @@ type CommitmentPrivateDetails struct {
 type TransferAgreement struct {
 	ID      string `json:"commitmentID"`
 	BuyerID string `json:"buyerID"`
+}
+
+type Data struct {
+	ID             string `json:"ID"`
+	Reputation     float64 `json:"Reputation"`
+}
+
+type DataPrivateDetails struct {
+	ID             string `json:"ID"`
+	Reputation     float64 `json:"Reputation"`
+}
+
+type Yield struct {
+	ID      string `json:"ID"`
+	Produced    float64 `json:"Produced"`
+}
+
+type YieldPrivateDetails struct { 
+	ID      string `json:"ID"`
+	Produced    float64 `json:"Produced"`
+}
+
+func (s *SmartContract) CreateYield(ctx contractapi.TransactionContextInterface) error {
+
+	transientMap, err := ctx.GetStub().GetTransient()
+	if err != nil {
+		return fmt.Errorf("error getting transient: %v", err)
+	}
+
+	// Commitment properties are private, therefore they get passed in transient field, instead of func args
+	transientYieldJSON, ok := transientMap["yield_properties"]
+	if !ok {
+		//log error to stdout
+		return fmt.Errorf("yield not found in the transient map input")
+	}
+
+	type yieldTransientInput struct {
+		Type           string `json:"objectType"` //Type is used to distinguish the various types of objects in state database
+		ID             string `json:"yieldID"`
+		Produced float64    `json:"produced"`
+	}
+
+	var yieldInput yieldTransientInput
+	err = json.Unmarshal(transientYieldJSON, &yieldInput)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal JSON: %v", err)
+	}
+	if len(yieldInput.Type) == 0 {
+		return fmt.Errorf("objectType field must be a non-empty string")
+	}
+	if len(yieldInput.ID) == 0 {
+		return fmt.Errorf("commitmentID field must be a non-empty string")
+	}
+	if yieldInput.Produced <= 0 {
+		return fmt.Errorf("rate field must be a positive integer")
+	}
+
+	// Check if commitment already exists
+	yieldAsBytes, err := ctx.GetStub().GetPrivateData(yieldCollection, yieldInput.ID)
+	if err != nil {
+		return fmt.Errorf("failed to get commitment: %v", err)
+	} else if yieldAsBytes != nil {
+		fmt.Println("Commitment already exists: " + yieldInput.ID)
+		return fmt.Errorf("this commitment already exists: " + yieldInput.ID)
+	}
+
+	// Get ID of submitting client identity
+	clientID, err := submittingClientIdentity(ctx)
+	if err != nil {
+	return err
+	}
+
+	// Verify that the client is submitting request to peer in their organization
+	// This is to ensure that a client from another org doesn't attempt to read or
+	// write private data from this peer.
+	err = verifyClientOrgMatchesPeerOrg(ctx)
+	if err != nil {
+		return fmt.Errorf("CreateCommitment cannot be performed: Error %v", err)
+	}
+
+	// Make submitting client the owner
+	yield := Yield{
+		ID:    yieldInput.ID,
+		Produced: yieldInput.Produced,
+	}
+	yieldJSONasBytes, err := json.Marshal(yield)
+	if err != nil {
+		return fmt.Errorf("failed to marshal commitment into JSON: %v", err)
+	}
+
+	// Save commitment to private data collection
+	// Typical logger, logs to stdout/file in the fabric managed docker container, running this chaincode
+	// Look for container name like dev-peer0.org1.example.com-{chaincodename_version}-xyz
+	log.Printf("CreateYield Put: collection %v, ID %v, owner %v", yieldCollection, yieldInput.ID, clientID)
+
+	err = ctx.GetStub().PutPrivateData(yieldCollection, yieldInput.ID, yieldJSONasBytes)
+	if err != nil {
+		return fmt.Errorf("failed to put commitment into private yield collecton: %v", err)
+	}
+
+	// Save commitment details to collection visible to owning organization
+	yieldPrivateDetails := YieldPrivateDetails{
+		ID:             yieldInput.ID,
+		Produced: yieldInput.Produced,
+	}
+
+	yieldPrivateDetailsAsBytes, err := json.Marshal(yieldPrivateDetails) // marshal commitment details to JSON
+	if err != nil {
+		return fmt.Errorf("failed to marshal into JSON: %v", err)
+	}
+
+	// Get collection name for this organization.
+	orgCollection, err := getCollectionName(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to infer private collection name for the org: %v", err)
+	}
+
+	// Put commitment rate value into owners org specific private data collection
+	log.Printf("Put: collection %v, ID %v", orgCollection, yieldInput.ID)
+	err = ctx.GetStub().PutPrivateData(orgCollection, yieldInput.ID, yieldPrivateDetailsAsBytes)
+	if err != nil {
+		return fmt.Errorf("failed to put commitment private details: %v", err)
+	}
+	return nil
+}
+
+func (s *SmartContract) CreateData(ctx contractapi.TransactionContextInterface) error {
+
+	transientMap, err := ctx.GetStub().GetTransient()
+	if err != nil {
+		return fmt.Errorf("error getting transient: %v", err)
+	}
+
+	// Commitment properties are private, therefore they get passed in transient field, instead of func args
+	transientDataJSON, ok := transientMap["data_properties"]
+	if !ok {
+		//log error to stdout
+		return fmt.Errorf("data not found in the transient map input")
+	}
+
+	type dataTransientInput struct {
+		Type           string `json:"objectType"` //Type is used to distinguish the various types of objects in state database
+		ID             string `json:"dataID"`
+		Reputation float64    `json:"reputation"`
+	}
+
+	var dataInput dataTransientInput
+	err = json.Unmarshal(transientDataJSON, &dataInput)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal JSON: %v", err)
+	}
+	if len(dataInput.Type) == 0 {
+		return fmt.Errorf("objectType field must be a non-empty string")
+	}
+	if len(dataInput.ID) == 0 {
+		return fmt.Errorf("commitmentID field must be a non-empty string")
+	}
+	if dataInput.Reputation <= 0 {
+		return fmt.Errorf("rate field must be a positive integer")
+	}
+
+	// Check if commitment already exists
+	dataAsBytes, err := ctx.GetStub().GetPrivateData(dataCollection, dataInput.ID)
+	if err != nil {
+		return fmt.Errorf("failed to get commitment: %v", err)
+	} else if dataAsBytes != nil {
+		fmt.Println("Commitment already exists: " + dataInput.ID)
+		return fmt.Errorf("this commitment already exists: " + dataInput.ID)
+	}
+
+	// Get ID of submitting client identity
+	clientID, err := submittingClientIdentity(ctx)
+	if err != nil {
+	return err
+	}
+
+	// Verify that the client is submitting request to peer in their organization
+	// This is to ensure that a client from another org doesn't attempt to read or
+	// write private data from this peer.
+	err = verifyClientOrgMatchesPeerOrg(ctx)
+	if err != nil {
+		return fmt.Errorf("CreateCommitment cannot be performed: Error %v", err)
+	}
+
+	// Make submitting client the owner
+	data := Data{
+		ID:    dataInput.ID,
+		Reputation: dataInput.Reputation,
+	}
+	dataJSONasBytes, err := json.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("failed to marshal commitment into JSON: %v", err)
+	}
+
+	// Save commitment to private data collection
+	// Typical logger, logs to stdout/file in the fabric managed docker container, running this chaincode
+	// Look for container name like dev-peer0.org1.example.com-{chaincodename_version}-xyz
+	log.Printf("CreateData Put: collection %v, ID %v, owner %v", dataCollection, dataInput.ID, clientID)
+
+	err = ctx.GetStub().PutPrivateData(dataCollection, dataInput.ID, dataJSONasBytes)
+	if err != nil {
+		return fmt.Errorf("failed to put commitment into private data collecton: %v", err)
+	}
+
+	// Save commitment details to collection visible to owning organization
+	dataPrivateDetails := DataPrivateDetails{
+		ID:             dataInput.ID,
+		Reputation: dataInput.Reputation,
+	}
+
+	dataPrivateDetailsAsBytes, err := json.Marshal(dataPrivateDetails) // marshal commitment details to JSON
+	if err != nil {
+		return fmt.Errorf("failed to marshal into JSON: %v", err)
+	}
+
+	// Get collection name for this organization.
+	orgCollection, err := getCollectionName(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to infer private collection name for the org: %v", err)
+	}
+
+	// Put commitment rate value into owners org specific private data collection
+	log.Printf("Put: collection %v, ID %v", orgCollection, dataInput.ID)
+	err = ctx.GetStub().PutPrivateData(orgCollection, dataInput.ID, dataPrivateDetailsAsBytes)
+	if err != nil {
+		return fmt.Errorf("failed to put commitment private details: %v", err)
+	}
+	return nil
 }
 
 // CreateCommitment creates a new commitment by placing the main commitment details in the commitmentCollection
@@ -163,7 +394,7 @@ func (s *SmartContract) CreateCommitment(ctx contractapi.TransactionContextInter
 		return fmt.Errorf("failed to infer private collection name for the org: %v", err)
 	}
 
-	// Put commitment appraised value into owners org specific private data collection
+	// Put commitment rate value into owners org specific private data collection
 	log.Printf("Put: collection %v, ID %v", orgCollection, commitmentInput.ID)
 	err = ctx.GetStub().PutPrivateData(orgCollection, commitmentInput.ID, commitmentPrivateDetailsAsBytes)
 	if err != nil {
@@ -335,7 +566,7 @@ func (s *SmartContract) TransferCommitment(ctx contractapi.TransactionContextInt
 		return fmt.Errorf("failed to infer private collection name for the org: %v", err)
 	}
 
-	// Delete the commitment appraised value from this organization's private data collection
+	// Delete the commitment rate value from this organization's private data collection
 	err = ctx.GetStub().DelPrivateData(ownersCollection, commitmentTransferInput.ID)
 	if err != nil {
 		return err
@@ -373,7 +604,7 @@ func (s *SmartContract) verifyAgreement(ctx contractapi.TransactionContextInterf
 		return fmt.Errorf("error: submitting client identity does not own commitment")
 	}
 
-	// Check 2: verify that the buyer has agreed to the appraised value
+	// Check 2: verify that the buyer has agreed to the rate value
 
 	// Get collection names
 	collectionOwner, err := getCollectionName(ctx) // get owner collection from caller identity
@@ -386,24 +617,24 @@ func (s *SmartContract) verifyAgreement(ctx contractapi.TransactionContextInterf
 	// Get hash of owners agreed to value
 	ownerRateHash, err := ctx.GetStub().GetPrivateDataHash(collectionOwner, commitmentID)
 	if err != nil {
-		return fmt.Errorf("failed to get hash of appraised value from owners collection %v: %v", collectionOwner, err)
+		return fmt.Errorf("failed to get hash of rate value from owners collection %v: %v", collectionOwner, err)
 	}
 	if ownerRateHash == nil {
-		return fmt.Errorf("hash of appraised value for %v does not exist in collection %v", commitmentID, collectionOwner)
+		return fmt.Errorf("hash of rate value for %v does not exist in collection %v", commitmentID, collectionOwner)
 	}
 
 	// Get hash of buyers agreed to value
 	buyerRateHash, err := ctx.GetStub().GetPrivateDataHash(collectionBuyer, commitmentID)
 	if err != nil {
-		return fmt.Errorf("failed to get hash of appraised value from buyer collection %v: %v", collectionBuyer, err)
+		return fmt.Errorf("failed to get hash of rate value from buyer collection %v: %v", collectionBuyer, err)
 	}
 	if buyerRateHash == nil {
-		return fmt.Errorf("hash of appraised value for %v does not exist in collection %v. AgreeToTransfer must be called by the buyer first", commitmentID, collectionBuyer)
+		return fmt.Errorf("hash of rate value for %v does not exist in collection %v. AgreeToTransfer must be called by the buyer first", commitmentID, collectionBuyer)
 	}
 
 	// Verify that the two hashes match
 	if !bytes.Equal(ownerRateHash, buyerRateHash) {
-		return fmt.Errorf("hash for appraised value for owner %x does not value for seller %x", ownerRateHash, buyerRateHash)
+		return fmt.Errorf("hash for rate value for owner %x does not value for seller %x", ownerRateHash, buyerRateHash)
 	}
 
 	return nil
@@ -595,3 +826,4 @@ func submittingClientIdentity(ctx contractapi.TransactionContextInterface) (stri
 	}
 	return string(decodeID), nil
 }
+
