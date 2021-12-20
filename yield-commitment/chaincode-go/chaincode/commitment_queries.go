@@ -33,6 +33,53 @@ func (s *SmartContract) ReadCommitment(ctx contractapi.TransactionContextInterfa
 
 }
 
+func (s *SmartContract) ReadProduced(ctx contractapi.TransactionContextInterface, yieldID string) (*Yield, error){
+
+	log.Printf("ReadYield: collection %v, ID %v", yieldCollection, yieldID)
+	yieldJSON, err := ctx.GetStub().GetPrivateData(yieldCollection, yieldID) //get the commitment from chaincode state
+	if err != nil {
+		return nil, fmt.Errorf("failed to read yield: %v", err)
+	}
+
+	//No Commitment found, return empty response
+	if yieldJSON == nil {
+		log.Printf("%v does not exist in collection %v", yieldID, yieldCollection)
+		return nil, nil
+	}
+
+	var yield *Yield
+	err = json.Unmarshal(yieldJSON, &yield)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal JSON: %v", err)
+	}
+
+	return yield, nil
+}
+
+func (s *SmartContract) ReadData(ctx contractapi.TransactionContextInterface, dataID string) (*Data, error) {
+	
+	log.Printf("ReadData: collection %v, ID %v", dataCollection, dataID)
+	dataJSON, err := ctx.GetStub().GetPrivateData(dataCollection, dataID) //get the commitment from chaincode state
+	if err != nil {
+		return nil, fmt.Errorf("failed to read data: %v", err)
+	}
+
+	//No Commitment found, return empty response
+	if dataJSON == nil {
+		log.Printf("%v does not exist in collection %v", dataID, dataCollection)
+		return nil, nil
+	}
+
+	var data *Data
+	err = json.Unmarshal(dataJSON, &data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal JSON: %v", err)
+	}
+
+	return data, nil
+}
+
+
 // ReadCommitmentPrivateDetails reads the commitment private details in organization specific collection
 func (s *SmartContract) ReadCommitmentPrivateDetails(ctx contractapi.TransactionContextInterface, collection string, commitmentID string) (*CommitmentPrivateDetails, error) {
 	log.Printf("ReadCommitmentPrivateDetails: collection %v, ID %v", collection, commitmentID)
