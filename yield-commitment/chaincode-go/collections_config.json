@@ -1,7 +1,25 @@
 [
  {
-   "name": "assetCollection",
-   "policy": "OR('Org1MSP.member', 'Org2MSP.member', 'Org3MSP.member')",
+   "name": "commitmentCollection",
+   "policy": "OR('Org1MSP.member', 'Org2MSP.member')",
+   "requiredPeerCount": 1,
+   "maxPeerCount": 1,
+   "blockToLive":1000000,
+   "memberOnlyRead": true,
+   "memberOnlyWrite": true
+},
+  {
+   "name": "dataCollection",
+   "policy": "OR('Org1MSP.member', 'Org2MSP.member')",
+   "requiredPeerCount": 1,
+   "maxPeerCount": 1,
+   "blockToLive":1000000,
+   "memberOnlyRead": true,
+   "memberOnlyWrite": true
+},
+  {
+   "name": "yieldCollection",
+   "policy": "OR('Org1MSP.member', 'Org2MSP.member')",
    "requiredPeerCount": 1,
    "maxPeerCount": 1,
    "blockToLive":1000000,
@@ -29,19 +47,7 @@
    "memberOnlyRead": true,
    "memberOnlyWrite": false,
    "endorsementPolicy": {
-     "signaturePolicy": "OR('Org2MSP.member','Org3MSP.member')"
+     "signaturePolicy": "OR('Org2MSP.member')"
    }
-  },
-  {
-    "name": "Org3MSPPrivateCollection",
-    "policy": "OR('Org3MSP.member')",
-    "requiredPeerCount": 0,
-    "maxPeerCount": 1,
-    "blockToLive":3,
-    "memberOnlyRead": true,
-    "memberOnlyWrite": false,
-    "endorsementPolicy": {
-      "signaturePolicy": "OR('Org3MSP.member')"
-    }
   }
 ]
